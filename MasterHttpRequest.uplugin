@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "1.0",
 	"FriendlyName": "MasterHttpRequest",
-	"Description": "Goes http request using blueprint.",
+	"Description": "Http request made simple.",
 	"Category": "Other",
 	"CreatedBy": "Mario tarosso",
 	"CreatedByURL": "",
