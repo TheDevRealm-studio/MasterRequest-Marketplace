@@ -6,6 +6,7 @@
 #include "JsonUtilities.h"
 #include "GenericPlatform/GenericPlatformHttp.h"
 #include "Async/Async.h"
+#include "Dom/JsonObject.h"
 
 void UMasterHttpRequestBPLibrary::MasterRequest(FString url, E_RequestType_CPP httpMethod, FRequestReturn callback)
 {

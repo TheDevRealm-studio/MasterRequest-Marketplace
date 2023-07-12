@@ -19,16 +19,16 @@ struct FResponseData
 {
 	GENERATED_BODY()
 
-	UPROPERTY(BlueprintReadOnly)
+	UPROPERTY(BlueprintReadOnly, Category = "HTTP Request")
 	bool bSuccess;
 
-	UPROPERTY(BlueprintReadOnly)
+	UPROPERTY(BlueprintReadOnly, Category = "HTTP Request")
 	FString Data;
 
-	UPROPERTY(BlueprintReadOnly)
+	UPROPERTY(BlueprintReadOnly, Category = "HTTP Request")
 	int32 StatusCode;
 
-	UPROPERTY(BlueprintReadOnly)
+	UPROPERTY(BlueprintReadOnly, Category = "HTTP Request")
 	FString ErrorMessage;
 };
 
@@ -37,10 +37,10 @@ struct FKeyValuePair
 {
     GENERATED_BODY()
 
-    UPROPERTY(BlueprintReadWrite)
+    UPROPERTY(BlueprintReadWrite, Category = "HTTP Request")
     FString Key;
 
-    UPROPERTY(BlueprintReadWrite)
+    UPROPERTY(BlueprintReadWrite, Category = "HTTP Request")
     FString Value;
 };
 
@@ -49,13 +49,13 @@ struct FNestedJson
 {
     GENERATED_BODY()
 
-    UPROPERTY(BlueprintReadWrite)
+    UPROPERTY(BlueprintReadWrite, Category = "HTTP Request")
     FKeyValuePair KeyValuePair;
 
-    UPROPERTY(BlueprintReadWrite)
+    UPROPERTY(BlueprintReadWrite, Category = "HTTP Request")
     bool bIsNested;
 
-    UPROPERTY(BlueprintReadWrite)
+    UPROPERTY(BlueprintReadWrite, Category = "HTTP Request")
     FString NestedKey;
 };
 

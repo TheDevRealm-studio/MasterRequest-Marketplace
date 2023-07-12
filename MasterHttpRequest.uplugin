@@ -4,7 +4,7 @@
 	"VersionName": "1.0",
 	"FriendlyName": "MasterHttpRequest",
 	"Description": "Http request made simple.",
-	"Category": "Other",
+	"Category": "Network",
 	"CreatedBy": "Mario tarosso",
 	"CreatedByURL": "",
 	"DocsURL": "",
