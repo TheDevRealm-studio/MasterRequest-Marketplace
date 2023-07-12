@@ -31,13 +31,24 @@ void UMasterHttpRequestBPLibrary::MasterRequestWithPayloadAndHeaders(FString url
     TSharedPtr<FJsonObject> JsonObject = MakeShareable(new FJsonObject());
     for (auto& KeyValuePair : bodyPayload)
     {
-        JsonObject->SetStringField(KeyValuePair.Key, KeyValuePair.Value);
+        if (!KeyValuePair.Key.IsEmpty() && !KeyValuePair.Value.IsEmpty())
+        {
+            JsonObject->SetStringField(KeyValuePair.Key, KeyValuePair.Value);
+        }
     }
 
     // Serialize the JSON object into a string
     FString BodyData;
     TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&BodyData);
-    FJsonSerializer::Serialize(JsonObject.ToSharedRef(), Writer);
+
+    if (JsonObject.IsValid() && JsonObject->Values.Num() > 0) // Only attempt to serialize if the JSON object is valid and has values
+    {
+        FJsonSerializer::Serialize(JsonObject.ToSharedRef(), Writer);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Error: JSON object is invalid or empty."));
+    }
 
     // Set the body content and the Content-Type header of the HTTP request
     HttpRequest->SetContentAsString(BodyData);
