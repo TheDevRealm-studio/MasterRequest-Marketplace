@@ -1,3 +1,11 @@
+/*
+==========================================================================================
+File: MasterHttpRequestBPLibrary.cpp
+Author: Mario Tarosso
+Year: 2023
+Publisher: MJGT Studio
+==========================================================================================
+*/
 #include "MasterHttpRequestBPLibrary.h"
 #include "HttpModule.h"
 #include "Interfaces/IHttpRequest.h"

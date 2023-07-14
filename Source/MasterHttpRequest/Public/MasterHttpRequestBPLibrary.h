@@ -1,3 +1,11 @@
+/*
+==========================================================================================
+File: MasterHttpRequestBPLibrary.h
+Author: Mario Tarosso
+Year: 2023
+Publisher: MJGT Studio
+==========================================================================================
+*/
 #pragma once
 
 #include "CoreMinimal.h"

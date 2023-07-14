@@ -1,5 +1,12 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
-
+/*
+==========================================================================================
+File: MasterHttpRequest.h
+Author: Mario Tarosso
+Year: 2023
+Publisher: MJGT Studio
+==========================================================================================
+*/
 #pragma once
 
 #include "Modules/ModuleManager.h"

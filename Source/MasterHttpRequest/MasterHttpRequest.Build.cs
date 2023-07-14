@@ -1,5 +1,11 @@
-// Some copyright should be here...
-
+/*
+==========================================================================================
+File: MasterHttpRequest.Build.cs
+Author: Mario Tarosso
+Year: 2023
+Publisher: MJGT Studio
+==========================================================================================
+*/
 using UnrealBuildTool;
 
 public class MasterHttpRequest : ModuleRules
