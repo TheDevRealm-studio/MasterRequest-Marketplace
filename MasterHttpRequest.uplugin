@@ -4,7 +4,7 @@
 	"VersionName": "1.0",
 	"FriendlyName": "MasterHttpRequest",
     "EngineVersion": "5.2",
-    "PlatformAllowList": ["Win64", "Win32", "Mac", "Linux", "HTML5"],
+    "PlatformAllowList": ["Win64", "Win32", "Mac", "Linux"],
     "PlatformDenyList": ["Android", "Gear VR", "HoloLens 2", "Nintendo Switch", "Oculus", "PS4", "SteamVR / HTC Vive", "XboxSeriesX", "Xbox One"],
     "MarketplaceURL" : "com.epicgames.launcher://ue/marketplace/product/e37622d6853e45b7b50f4cdd9b4a5053",
 	"Description": "Http request made simple.",
