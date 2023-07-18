@@ -21,8 +21,7 @@
 			"Name": "MasterHttpRequest",
 			"Type": "Runtime",
 			"LoadingPhase": "PreLoadingScreen",
-            "WhitelistPlatforms": ["Win64", "Win32", "Mac", "Linux"],
-            "BlacklistPlatforms": ["Android", "Gear VR", "HoloLens 2", "Nintendo Switch", "Oculus", "PS4", "SteamVR / HTC Vive", "XboxSeriesX", "Xbox One"],
+            "WhitelistPlatforms": ["Win64", "Win32", "Mac", "Linux"]
 		}
 	]
 }
