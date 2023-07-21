@@ -10,6 +10,8 @@ Publisher: MJGT Studio
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
+// Include the headers for JSON handling
+#include "Json.h"
 #include "MasterHttpRequestBPLibrary.generated.h"
 
 UENUM(BlueprintType)
@@ -95,4 +97,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "HTTP Request")
     static void DecodeNestedJson(FString jsonString, FString key, bool& success, TArray<FNestedJson>& keyValuePairArray);
 
+    // Notice it's not a static function and it's not exposed to Blueprints
+    static void WriteJsonValue(TSharedRef<TJsonWriter<>> Writer, TSharedPtr<FJsonValue> JsonVal);
 };

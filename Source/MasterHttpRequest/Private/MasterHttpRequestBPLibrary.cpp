@@ -252,8 +252,14 @@ void UMasterHttpRequestBPLibrary::DecodeNestedJson(FString jsonString, FString k
                     Writer->WriteArrayStart();
                     for (const auto& ArrayVal : pair.Value->AsArray())
                     {
-                        // Here assuming array elements are objects, need more checks if there can be other types
-                        FJsonSerializer::Serialize(ArrayVal->AsObject().ToSharedRef(), Writer);
+                        if (ArrayVal->Type == EJson::Object)
+                        {
+                            FJsonSerializer::Serialize(ArrayVal->AsObject().ToSharedRef(), Writer);
+                        }
+                        else
+                        {
+                            WriteJsonValue(Writer, ArrayVal);
+                        }
                     }
                     Writer->WriteArrayEnd();
                 }
@@ -276,5 +282,38 @@ void UMasterHttpRequestBPLibrary::DecodeNestedJson(FString jsonString, FString k
     {
         success = false;
         keyValuePairArray.Empty();
+    }
+}
+
+// Helper function to write different types of Json Values
+void UMasterHttpRequestBPLibrary::WriteJsonValue(TSharedRef<TJsonWriter<>> Writer, TSharedPtr<FJsonValue> JsonVal)
+{
+    switch (JsonVal->Type)
+    {
+        case EJson::String:
+            Writer->WriteValue(JsonVal->AsString());
+            break;
+
+        case EJson::Number:
+            Writer->WriteValue(JsonVal->AsNumber());
+            break;
+
+        case EJson::Boolean:
+            Writer->WriteValue(JsonVal->AsBool());
+            break;
+        case EJson::Object:
+            FJsonSerializer::Serialize(JsonVal->AsObject().ToSharedRef(), Writer);
+            break;
+        case EJson::Array:
+            Writer->WriteArrayStart();
+            for (const auto& ArrayVal : JsonVal->AsArray())
+            {
+                WriteJsonValue(Writer, ArrayVal);
+            }
+            Writer->WriteArrayEnd();
+            break;
+        // More cases can be added as per requirements
+        default:
+            break;
     }
 }
