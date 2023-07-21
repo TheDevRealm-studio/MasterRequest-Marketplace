@@ -82,23 +82,28 @@ void UMasterHttpRequestBPLibrary::MasterRequestWithPayloadAndHeaders(FString url
             if (debugResponse) {
                  // Debugging: print the response information to a text file
                 FString ResponseInfo;
+                ResponseInfo += "\n\nServer Header:\n";
                 for (auto& Header : Response->GetAllHeaders()) {
                     ResponseInfo += Header + "\n";
                 }
 
                 // Get the payload
                 ResponseInfo += "\n\nServer Payload:\n" + Response->GetContentAsString();
-                ResponseInfo += "\n\nServer Respose:\n" + ReturnData.Data;
+                ResponseInfo += "\n\nServer Response:\n" + ReturnData.Data;
                 ResponseInfo += "\n\nStatus code:\n" + FString::FromInt(ReturnData.StatusCode);
 
                 if (JsonObject.IsValid() && JsonObject->Values.Num() > 0) {
+                    // Add separator
+                    ResponseInfo += "\n\n--/--\n\n";
+
                     // Get the client payload and append it to the response information
-                    ResponseInfo += "\n\nClient Payload:\n";
+                    ResponseInfo += "Client Payload:\n";
                     for (auto& Field : JsonObject->Values) {
                         ResponseInfo += Field.Key + ": " + Field.Value->AsString() + "\n";
                     }
                     ResponseInfo += "\n";
                 }
+
 
                 // Generate a timestamp for the filename dd-mm-yyyy:hh-mm-ss
                 FString Timestamp = FDateTime::Now().ToString(TEXT("%d-%m-%Y_%H-%M-%S"));
