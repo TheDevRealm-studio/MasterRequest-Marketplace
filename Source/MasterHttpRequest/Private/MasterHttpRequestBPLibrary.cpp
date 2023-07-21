@@ -12,6 +12,8 @@ Publisher: MJGT Studio
 #include "Interfaces/IHttpResponse.h"
 #include "Json.h"
 #include "JsonUtilities.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "GenericPlatform/GenericPlatformHttp.h"
 #include "Async/Async.h"
 #include "Dom/JsonObject.h"
@@ -19,10 +21,10 @@ Publisher: MJGT Studio
 void UMasterHttpRequestBPLibrary::MasterRequest(FString url, E_RequestType_CPP httpMethod, FRequestReturn callback)
 {
     // Call the overloaded version with empty arrays for bodyPayload and headers
-    MasterRequestWithPayloadAndHeaders(url, httpMethod, TArray<FKeyValuePair>(), TArray<FKeyValuePair>(), callback);
+     MasterRequestWithPayloadAndHeaders(url, httpMethod, TArray<FKeyValuePair>(), TArray<FKeyValuePair>(), callback, false);
 }
 
-void UMasterHttpRequestBPLibrary::MasterRequestWithPayloadAndHeaders(FString url, E_RequestType_CPP httpMethod, TArray<FKeyValuePair> bodyPayload, TArray<FKeyValuePair> headers, FRequestReturn callback)
+void UMasterHttpRequestBPLibrary::MasterRequestWithPayloadAndHeaders(FString url, E_RequestType_CPP httpMethod, TArray<FKeyValuePair> bodyPayload, TArray<FKeyValuePair> headers, FRequestReturn callback, bool debugResponse)
 {
     TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = FHttpModule::Get().CreateRequest();
 
@@ -32,7 +34,8 @@ void UMasterHttpRequestBPLibrary::MasterRequestWithPayloadAndHeaders(FString url
     // Set the headers on the HttpRequest
     for (auto& KeyValuePair : headers)
     {
-        HttpRequest->SetHeader(KeyValuePair.Key, KeyValuePair.Value);
+        FString EncodedValue = FGenericPlatformHttp::UrlEncode(KeyValuePair.Value);
+        HttpRequest->SetHeader(KeyValuePair.Key, EncodedValue);
     }
 
     // Create a JSON object and populate it with the key-value pairs from bodyPayload
@@ -41,7 +44,8 @@ void UMasterHttpRequestBPLibrary::MasterRequestWithPayloadAndHeaders(FString url
     {
         if (!KeyValuePair.Key.IsEmpty() && !KeyValuePair.Value.IsEmpty())
         {
-            JsonObject->SetStringField(KeyValuePair.Key, KeyValuePair.Value);
+            FString EncodedValue = FGenericPlatformHttp::UrlEncode(KeyValuePair.Value);
+            JsonObject->SetStringField(KeyValuePair.Key, EncodedValue);
         }
     }
 
@@ -65,7 +69,7 @@ void UMasterHttpRequestBPLibrary::MasterRequestWithPayloadAndHeaders(FString url
         HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
     }
 
-    HttpRequest->OnProcessRequestComplete().BindLambda([callback](FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
+    HttpRequest->OnProcessRequestComplete().BindLambda([callback, debugResponse, url, httpMethod, JsonObject](FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
     {
         FResponseData ReturnData;
         ReturnData.bSuccess = bWasSuccessful;
@@ -74,6 +78,57 @@ void UMasterHttpRequestBPLibrary::MasterRequestWithPayloadAndHeaders(FString url
             ReturnData.Data = Response->GetContentAsString();
             ReturnData.StatusCode = Response->GetResponseCode();
             ReturnData.ErrorMessage = Response->GetContentAsString(); // You may want to handle error messages differently
+
+            if (debugResponse) {
+                 // Debugging: print the response information to a text file
+                FString ResponseInfo;
+                for (auto& Header : Response->GetAllHeaders()) {
+                    ResponseInfo += Header + "\n";
+                }
+
+                // Get the payload
+                ResponseInfo += "\n\nServer Payload:\n" + Response->GetContentAsString();
+                ResponseInfo += "\n\nServer Respose:\n" + ReturnData.Data;
+                ResponseInfo += "\n\nStatus code:\n" + FString::FromInt(ReturnData.StatusCode);
+
+                if (JsonObject.IsValid() && JsonObject->Values.Num() > 0) {
+                    // Get the client payload and append it to the response information
+                    ResponseInfo += "\n\nClient Payload:\n";
+                    for (auto& Field : JsonObject->Values) {
+                        ResponseInfo += Field.Key + ": " + Field.Value->AsString() + "\n";
+                    }
+                    ResponseInfo += "\n";
+                }
+
+                // Generate a timestamp for the filename dd-mm-yyyy:hh-mm-ss
+                FString Timestamp = FDateTime::Now().ToString(TEXT("%d-%m-%Y_%H-%M-%S"));
+
+                // Create a new variable to store the modified URL
+                FString SlugifiedURL = url;
+                // Make the URL a valid filename by replacing ":" with "_"
+                SlugifiedURL.ReplaceInline(TEXT("//"), TEXT(" "));
+                SlugifiedURL.ReplaceInline(TEXT("/"), TEXT(" "));
+                SlugifiedURL.ReplaceInline(TEXT(":"), TEXT("_"));
+                SlugifiedURL.ReplaceInline(TEXT("http"), TEXT("http_"));
+                SlugifiedURL.ReplaceInline(TEXT("https"), TEXT("https_"));
+
+                // Set the filename as URL-method-timestamp.txt
+                FString FileName = SlugifiedURL + "-" + StaticEnum<E_RequestType_CPP>()->GetDisplayNameTextByValue(static_cast<int64>(httpMethod)).ToString() + "-" + Timestamp + ".txt";
+                FString FileDirectory = FPaths::ProjectSavedDir() + "/DebugHTTP";
+                FString FullPath = FileDirectory + "/" + FileName;
+
+                // Ensure that the directory exists
+                if (!FPaths::DirectoryExists(FileDirectory)) {
+                    FPlatformFileManager::Get().GetPlatformFile().CreateDirectory(*FileDirectory);
+                }
+
+                // Write the response information to the file
+                if (FFileHelper::SaveStringToFile(ResponseInfo, *FullPath)) {
+                    UE_LOG(LogTemp, Warning, TEXT("Saved response information to %s"), *FullPath);
+                } else {
+                    UE_LOG(LogTemp, Error, TEXT("Failed to save response information to %s"), *FullPath);
+                }
+            }
         }
         else
         {
@@ -87,11 +142,10 @@ void UMasterHttpRequestBPLibrary::MasterRequestWithPayloadAndHeaders(FString url
     HttpRequest->ProcessRequest(); // Don't forget to actually send the request
 }
 
-void UMasterHttpRequestBPLibrary::MasterRequestAsync(FString url, E_RequestType_CPP httpMethod, TArray<FKeyValuePair> bodyPayload, TArray<FKeyValuePair> headers, FRequestReturn callback)
+void UMasterHttpRequestBPLibrary::MasterRequestAsync(FString url, E_RequestType_CPP httpMethod, TArray<FKeyValuePair> bodyPayload, TArray<FKeyValuePair> headers, FRequestReturn callback, bool debugResponse)
 {
-    Async(EAsyncExecution::TaskGraph, [url, httpMethod, bodyPayload, headers, callback]() {
-        MasterRequestWithPayloadAndHeaders(url, httpMethod, bodyPayload, headers, callback);
-        //now handle the callback on the game thread
+    Async(EAsyncExecution::TaskGraph, [=]() { // Capture 'url' by value
+        MasterRequestWithPayloadAndHeaders(url, httpMethod, bodyPayload, headers, callback, debugResponse);
     });
 }
 
