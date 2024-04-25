@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "1.0",
 	"FriendlyName": "MasterHttpRequest",
-    "EngineVersion": "5.3",
+    "EngineVersion": "5.4",
     "MarketplaceURL" : "com.epicgames.launcher://ue/marketplace/product/e37622d6853e45b7b50f4cdd9b4a5053",
 	"Description": "Http request made simple.",
 	"Category": "Network",
