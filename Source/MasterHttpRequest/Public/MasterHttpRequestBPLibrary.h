@@ -92,7 +92,7 @@ public:
 	// Asynchronous version with bodyPayload and headers
 	UFUNCTION(BlueprintCallable, Category = "Async HTTP Request")
     static void MasterRequestAsync(FString url, E_RequestType_CPP httpMethod, TArray<FKeyValuePair> bodyPayload, TArray<FKeyValuePair> headers, FRequestReturn callback, bool debugResponse = false);
-
+    // Asynchronous version with bodyPayload and headers same as above but without encoding
     UFUNCTION(BlueprintCallable, Category = "Async HTTP Request Without Encoding")
     static void MasterRequestAsyncWithoutEncoding(FString url, E_RequestType_CPP httpMethod, TArray<FKeyValuePair> bodyPayload, TArray<FKeyValuePair> headers, FRequestReturn callback, bool debugResponse = false);
 
