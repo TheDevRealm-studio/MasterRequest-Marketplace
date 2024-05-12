@@ -147,10 +147,138 @@ void UMasterHttpRequestBPLibrary::MasterRequestWithPayloadAndHeaders(FString url
     HttpRequest->ProcessRequest(); // Don't forget to actually send the request
 }
 
+void UMasterHttpRequestBPLibrary::MasterRequestWithPayloadAndHeadersWithoutEncoding(FString url, E_RequestType_CPP httpMethod, TArray<FKeyValuePair> bodyPayload, TArray<FKeyValuePair> headers, FRequestReturn callback, bool debugResponse)
+{
+    TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = FHttpModule::Get().CreateRequest();
+
+    HttpRequest->SetURL(url);
+    HttpRequest->SetVerb(StaticEnum<E_RequestType_CPP>()->GetDisplayNameTextByValue(static_cast<int64>(httpMethod)).ToString());
+
+    // Set the headers on the HttpRequest
+    for (auto& KeyValuePair : headers)
+    {
+        HttpRequest->SetHeader(KeyValuePair.Key, KeyValuePair.Value);
+    }
+
+    // Create a JSON object and populate it with the key-value pairs from bodyPayload
+    TSharedPtr<FJsonObject> JsonObject = MakeShareable(new FJsonObject());
+    for (auto& KeyValuePair : bodyPayload)
+    {
+        if (!KeyValuePair.Key.IsEmpty() && !KeyValuePair.Value.IsEmpty())
+        {
+            JsonObject->SetStringField(KeyValuePair.Key, KeyValuePair.Value);
+        }
+    }
+
+    // Serialize the JSON object into a string
+    FString BodyData;
+    TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&BodyData);
+
+    if (JsonObject.IsValid() && JsonObject->Values.Num() > 0) // Only attempt to serialize if the JSON object is valid and has values
+    {
+        FJsonSerializer::Serialize(JsonObject.ToSharedRef(), Writer);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Error: JSON object is invalid or empty."));
+    }
+
+    // Set the body content and the Content-Type header of the HTTP request
+    HttpRequest->SetContentAsString(BodyData);
+    if (HttpRequest->GetHeader(TEXT("Content-Type")).IsEmpty()) // Only set the Content-Type header if it hasn't been set already
+    {
+        HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
+    }
+
+    HttpRequest->OnProcessRequestComplete().BindLambda([callback, debugResponse, url, httpMethod, JsonObject](FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
+    {
+        FResponseData ReturnData;
+        ReturnData.bSuccess = bWasSuccessful;
+        if (Response.IsValid()) // Ensure that the response is valid
+        {
+            ReturnData.Data = Response->GetContentAsString();
+            ReturnData.StatusCode = Response->GetResponseCode();
+            ReturnData.ErrorMessage = Response->GetContentAsString(); // You may want to handle error messages differently
+
+            if (debugResponse) {
+                 // Debugging: print the response information to a text file
+                FString ResponseInfo;
+                ResponseInfo += "\n\nServer Header:\n";
+                for (auto& Header : Response->GetAllHeaders()) {
+                    ResponseInfo += Header + "\n";
+                }
+
+                // Get the payload
+                ResponseInfo += "\n\nServer Payload:\n" + Response->GetContentAsString();
+                ResponseInfo += "\n\nServer Response:\n" + ReturnData.Data;
+                ResponseInfo += "\n\nStatus code:\n" + FString::FromInt(ReturnData.StatusCode);
+
+                if (JsonObject.IsValid() && JsonObject->Values.Num() > 0) {
+                    // Add separator
+                    ResponseInfo += "\n\n--/--\n\n";
+
+                    // Get the client payload and append it to the response information
+                    ResponseInfo += "Client Payload:\n";
+                    for (auto& Field : JsonObject->Values) {
+                        ResponseInfo += Field.Key + ": " + Field.Value->AsString() + "\n";
+                    }
+                    ResponseInfo += "\n";
+                }
+
+
+                // Generate a timestamp for the filename dd-mm-yyyy:hh-mm-ss
+                FString Timestamp = FDateTime::Now().ToString(TEXT("%d-%m-%Y_%H-%M-%S"));
+
+                // Create a new variable to store the modified URL
+                FString SlugifiedURL = url;
+                // Make the URL a valid filename by replacing ":" with "_"
+                SlugifiedURL.ReplaceInline(TEXT("//"), TEXT(" "));
+                SlugifiedURL.ReplaceInline(TEXT("/"), TEXT(" "));
+                SlugifiedURL.ReplaceInline(TEXT(":"), TEXT("_"));
+                SlugifiedURL.ReplaceInline(TEXT("http"), TEXT("http_"));
+                SlugifiedURL.ReplaceInline(TEXT("https"), TEXT("https_"));
+
+                // Set the filename as URL-method-timestamp.txt
+                FString FileName = SlugifiedURL + "-" + StaticEnum<E_RequestType_CPP>()->GetDisplayNameTextByValue(static_cast<int64>(httpMethod)).ToString() + "-" + Timestamp + ".txt";
+                FString FileDirectory = FPaths::ProjectSavedDir() + "/DebugHTTP";
+                FString FullPath = FileDirectory + "/" + FileName;
+
+                // Ensure that the directory exists
+                if (!FPaths::DirectoryExists(FileDirectory)) {
+                    FPlatformFileManager::Get().GetPlatformFile().CreateDirectory(*FileDirectory);
+                }
+
+                // Write the response information to the file
+                if (FFileHelper::SaveStringToFile(ResponseInfo, *FullPath)) {
+                    UE_LOG(LogTemp, Warning, TEXT("Saved response information to %s"), *FullPath);
+                } else {
+                    UE_LOG(LogTemp, Error, TEXT("Failed to save response information to %s"), *FullPath);
+                }
+            }
+        }
+        else
+        {
+            ReturnData.ErrorMessage = "No valid response.";
+            ReturnData.StatusCode = 0;
+        }
+
+        callback.ExecuteIfBound(ReturnData);
+    });
+
+    HttpRequest->ProcessRequest(); // Don't forget to actually send the request
+}
+
 void UMasterHttpRequestBPLibrary::MasterRequestAsync(FString url, E_RequestType_CPP httpMethod, TArray<FKeyValuePair> bodyPayload, TArray<FKeyValuePair> headers, FRequestReturn callback, bool debugResponse)
 {
     Async(EAsyncExecution::TaskGraph, [=]() { // Capture 'url' by value
         MasterRequestWithPayloadAndHeaders(url, httpMethod, bodyPayload, headers, callback, debugResponse);
+    });
+}
+
+void UMasterHttpRequestBPLibrary::MasterRequestAsyncWithoutEncoding(FString url, E_RequestType_CPP httpMethod, TArray<FKeyValuePair> bodyPayload, TArray<FKeyValuePair> headers, FRequestReturn callback, bool debugResponse)
+{
+    Async(EAsyncExecution::TaskGraph, [=]() { // Capture 'url' by value
+        MasterRequestWithPayloadAndHeadersWithoutEncoding(url, httpMethod, bodyPayload, headers, callback, debugResponse);
     });
 }
 

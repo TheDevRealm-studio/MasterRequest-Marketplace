@@ -6,3 +6,6 @@ To build for production,
 
 mor info:
 https://forums.unrealengine.com/t/how-to-manually-build-plugins/352910
+
+Code compile:
+.\RunUAT.bat BuildPlugin -plugin="C:\Users\mario\Documents\Unreal Projects\MasterRequest\Plugins\MasterRequest\MasterHttpRequest.uplugin" -package="C:\Users\mario\Downloads\Plug" -TargetPlatforms=Win64
