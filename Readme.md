@@ -19,7 +19,9 @@ For additional information and troubleshooting, refer to the [Unreal Engine Foru
 ### Building Plugin from Command Line
 
 You can also build the plugin from the command line using the following command:
+Make sure you have windonws SDK and navigate to this path 
 
+ C:\Program Files\Epic Games\UE_5.5\Engine\Build\BatchFiles and run the line bellow
 ```shell
 .\RunUAT.bat BuildPlugin -plugin="C:\Users\mario\Documents\Unreal Projects\MasterRequest\Plugins\MasterRequest\MasterHttpRequest.uplugin" -package="C:\Users\mario\Downloads\Plug" -TargetPlatforms=Win64
 ```
