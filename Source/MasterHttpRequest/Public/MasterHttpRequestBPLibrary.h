@@ -29,14 +29,46 @@ enum class EHttpMethod : uint8
 UENUM(BlueprintType)
 enum class EHttpHeaderKey : uint8
 {
-    None            UMETA(DisplayName = "None"),
-    Authorization   UMETA(DisplayName = "Authorization"),
-    UserAgent       UMETA(DisplayName = "User-Agent"),
-    AcceptLanguage  UMETA(DisplayName = "Accept-Language"),
-    CacheControl    UMETA(DisplayName = "Cache-Control"),
-    Cookie          UMETA(DisplayName = "Cookie"),
-    Referer         UMETA(DisplayName = "Referer"),
-    Custom          UMETA(DisplayName = "Custom")
+    None                UMETA(DisplayName = "None"),
+    Authorization       UMETA(DisplayName = "Authorization"),
+    ContentType         UMETA(DisplayName = "Content-Type"),
+    Accept              UMETA(DisplayName = "Accept"),
+    UserAgent           UMETA(DisplayName = "User-Agent"),
+    AcceptLanguage      UMETA(DisplayName = "Accept-Language"),
+    AcceptEncoding      UMETA(DisplayName = "Accept-Encoding"),
+    CacheControl        UMETA(DisplayName = "Cache-Control"),
+    Connection          UMETA(DisplayName = "Connection"),
+    Cookie              UMETA(DisplayName = "Cookie"),
+    Host                UMETA(DisplayName = "Host"),
+    Origin              UMETA(DisplayName = "Origin"),
+    Referer             UMETA(DisplayName = "Referer"),
+    XRequestedWith      UMETA(DisplayName = "X-Requested-With"),
+    XApiKey             UMETA(DisplayName = "X-API-Key"),
+    XAuthToken          UMETA(DisplayName = "X-Auth-Token"),
+    XCSRFToken          UMETA(DisplayName = "X-CSRF-Token"),
+    Custom              UMETA(DisplayName = "Custom")
+};
+
+UENUM(BlueprintType)
+enum class EContentType : uint8
+{
+    ApplicationJson         UMETA(DisplayName = "application/json"),
+    ApplicationXml          UMETA(DisplayName = "application/xml"),
+    ApplicationFormEncoded  UMETA(DisplayName = "application/x-www-form-urlencoded"),
+    MultipartFormData       UMETA(DisplayName = "multipart/form-data"),
+    TextPlain               UMETA(DisplayName = "text/plain"),
+    TextHtml                UMETA(DisplayName = "text/html"),
+    TextXml                 UMETA(DisplayName = "text/xml"),
+    Custom                  UMETA(DisplayName = "Custom")
+};
+
+UENUM(BlueprintType)
+enum class EDebugLevel : uint8
+{
+    None        UMETA(DisplayName = "No Debug"),
+    Basic       UMETA(DisplayName = "Basic (Console Only)"),
+    Detailed    UMETA(DisplayName = "Detailed (Console + File)"),
+    Verbose     UMETA(DisplayName = "Verbose (All Details)")
 };
 
 UENUM(BlueprintType)
@@ -87,7 +119,22 @@ struct FHttpOptions
     bool bAllowSelfSignedSSL = false;
 
     UPROPERTY(BlueprintReadWrite, Category = "HTTP")
-    bool bDebug = false;
+    EDebugLevel DebugLevel = EDebugLevel::None;
+
+    UPROPERTY(BlueprintReadWrite, Category = "HTTP")
+    EContentType ContentType = EContentType::ApplicationJson;
+
+    UPROPERTY(BlueprintReadWrite, Category = "HTTP")
+    FString CustomContentType; // Used if ContentType == Custom
+
+    UPROPERTY(BlueprintReadWrite, Category = "HTTP")
+    bool bFollowRedirects = true;
+
+    UPROPERTY(BlueprintReadWrite, Category = "HTTP")
+    int32 MaxRedirects = 5;
+
+    UPROPERTY(BlueprintReadWrite, Category = "HTTP")
+    bool bVerifySSL = true;
 };
 
 USTRUCT(BlueprintType)
@@ -105,10 +152,25 @@ struct FHttpResponseSimple
     int32 StatusCode;
 
     UPROPERTY(BlueprintReadOnly, Category = "HTTP")
+    FString StatusText;
+
+    UPROPERTY(BlueprintReadOnly, Category = "HTTP")
     FString ErrorMessage;
 
     UPROPERTY(BlueprintReadOnly, Category = "HTTP")
     TArray<FHttpKeyValue> Headers;
+
+    UPROPERTY(BlueprintReadOnly, Category = "HTTP")
+    float RequestDurationSeconds;
+
+    UPROPERTY(BlueprintReadOnly, Category = "HTTP")
+    int32 ContentLength;
+
+    UPROPERTY(BlueprintReadOnly, Category = "HTTP")
+    FString ContentType;
+
+    UPROPERTY(BlueprintReadOnly, Category = "HTTP")
+    FString URL;
 };
 
 DECLARE_DYNAMIC_DELEGATE_OneParam(FHttpResponseDelegate, FHttpResponseSimple, Response);
@@ -141,6 +203,75 @@ public:
         FHttpResponseDelegate Callback,
         FHttpOptions Options
     );
+
+    /**
+    * Quick GET request with minimal parameters
+    * @param URL - The endpoint URL
+    * @param Callback - Delegate called on completion
+    * @param Options - Optional settings (uses defaults if not provided)
+    */
+    UFUNCTION(BlueprintCallable, Category = "HTTP Request | Quick Methods")
+    static void QuickGet(
+        const FString& URL,
+        FHttpResponseDelegate Callback,
+        FHttpOptions Options = FHttpOptions()
+    );
+
+    /**
+    * Quick POST request with JSON body
+    * @param URL - The endpoint URL
+    * @param JsonBody - JSON string to send as body
+    * @param Callback - Delegate called on completion
+    * @param Options - Optional settings
+    */
+    UFUNCTION(BlueprintCallable, Category = "HTTP Request | Quick Methods")
+    static void QuickPost(
+        const FString& URL,
+        const FString& JsonBody,
+        FHttpResponseDelegate Callback,
+        FHttpOptions Options = FHttpOptions()
+    );
+
+    /**
+    * Create a Bearer token authorization header
+    * @param Token - The bearer token
+    * @return Header structure ready to use
+    */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "HTTP Request | Helpers")
+    static FHttpHeaderEnumValue MakeBearerToken(const FString& Token);
+
+    /**
+    * Create an API Key header
+    * @param ApiKey - The API key value
+    * @return Header structure ready to use
+    */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "HTTP Request | Helpers")
+    static FHttpHeaderEnumValue MakeApiKey(const FString& ApiKey);
+
+    /**
+    * Create a Content-Type header from enum
+    * @param ContentType - The content type enum
+    * @param CustomType - Custom content type if ContentType is Custom
+    * @return Header structure ready to use
+    */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "HTTP Request | Helpers")
+    static FHttpHeaderEnumValue MakeContentTypeHeader(EContentType ContentType, const FString& CustomType = "");
+
+    /**
+    * Check if response status code indicates success (2xx range)
+    * @param StatusCode - HTTP status code
+    * @return True if status code is in success range
+    */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "HTTP Request | Helpers")
+    static bool IsSuccessStatusCode(int32 StatusCode);
+
+    /**
+    * Get human-readable status text from status code
+    * @param StatusCode - HTTP status code
+    * @return Status text description
+    */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "HTTP Request | Helpers")
+    static FString GetStatusText(int32 StatusCode);
 
     /**
     * Helper to create a key-value pair for headers or params.
