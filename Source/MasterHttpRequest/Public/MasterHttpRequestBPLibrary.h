@@ -24,6 +24,15 @@ enum class E_RequestType_CPP : uint8
     PATCH   UMETA(DisplayName = "PATCH"),
 };
 
+UENUM(BlueprintType)
+enum class EHttpHeaderField : uint8
+{
+    ContentType UMETA(DisplayName = "Content-Type"),
+    Accept UMETA(DisplayName = "Accept"),
+    Authorization UMETA(DisplayName = "Authorization"),
+    Custom UMETA(DisplayName = "Custom"),
+};
+
 USTRUCT(BlueprintType)
 struct FResponseData
 {
@@ -78,9 +87,15 @@ class UMasterHttpRequestBPLibrary : public UBlueprintFunctionLibrary
     GENERATED_BODY()
 
 public:
-	// Overloaded version without bodyPayload and headers
-	UFUNCTION(BlueprintCallable, Category = "HTTP Request")
-	static void MasterRequest(FString url, E_RequestType_CPP httpMethod, FRequestReturn callback);
+    UFUNCTION(BlueprintPure, Category = "HTTP Request")
+    static FKeyValuePair MakeHeader(EHttpHeaderField Header, FString Value, FString CustomName = TEXT(""));
+
+    UFUNCTION(BlueprintCallable, Category = "HTTP Request")
+    static void MasterRequestAdvanced(FString url, E_RequestType_CPP httpMethod, TArray<FKeyValuePair> bodyPayload, TArray<FKeyValuePair> headers, FRequestReturn callback, bool bEncodePayload = true, bool bAsync = false, bool debugResponse = false);
+
+        // Overloaded version without bodyPayload and headers
+        UFUNCTION(BlueprintCallable, Category = "HTTP Request")
+        static void MasterRequest(FString url, E_RequestType_CPP httpMethod, FRequestReturn callback);
 
 	// Overloaded version with bodyPayload and headers
 	UFUNCTION(BlueprintCallable, Category = "HTTP Request")
