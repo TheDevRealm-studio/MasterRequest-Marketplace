@@ -39,6 +39,15 @@ enum class EHttpHeaderKey : uint8
     Custom          UMETA(DisplayName = "Custom")
 };
 
+UENUM(BlueprintType)
+enum class EJsonDecodeResult : uint8
+{
+    Failed          UMETA(DisplayName = "Failed"),
+    Value           UMETA(DisplayName = "Single Value"),
+    ObjectFields    UMETA(DisplayName = "Object Fields"),
+    ArrayValues     UMETA(DisplayName = "Array Values")
+};
+
 USTRUCT(BlueprintType)
 struct FHttpHeaderEnumValue
 {
@@ -150,7 +159,7 @@ public:
     * Returns a string value, an array of key-value pairs for objects, or an array of strings for arrays.
     */
     UFUNCTION(BlueprintCallable, Category = "HTTP Request")
-    static void DecodeJson(const FString& JsonString, const FString& KeyPath, bool& bSuccess, FString& Value, TArray<FHttpKeyValue>& ObjectFields, TArray<FString>& ArrayValues);
+    static void DecodeJson(const FString& JsonString, const FString& KeyPath, EJsonDecodeResult& Result, FString& Value, TArray<FHttpKeyValue>& ObjectFields, TArray<FString>& ArrayValues);
 
     /**
     * Set default headers for JSON APIs (Content-Type, Accept, etc.).

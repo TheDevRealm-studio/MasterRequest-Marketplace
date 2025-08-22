@@ -160,9 +160,9 @@ void UMasterHttpRequestBPLibrary::SendHttpRequest(
     Async(EAsyncExecution::TaskGraph, RequestLambda);
 }
 
-void UMasterHttpRequestBPLibrary::DecodeJson(const FString& JsonString, const FString& KeyPath, bool& bSuccess, FString& Value, TArray<FHttpKeyValue>& ObjectFields, TArray<FString>& ArrayValues)
+void UMasterHttpRequestBPLibrary::DecodeJson(const FString& JsonString, const FString& KeyPath, EJsonDecodeResult& Result, FString& Value, TArray<FHttpKeyValue>& ObjectFields, TArray<FString>& ArrayValues)
 {
-    bSuccess = false;
+    Result = EJsonDecodeResult::Failed;
     Value = TEXT("");
     ObjectFields.Empty();
     ArrayValues.Empty();
@@ -213,7 +213,7 @@ void UMasterHttpRequestBPLibrary::DecodeJson(const FString& JsonString, const FS
                 }
                 ObjectFields.Add(MakeKeyValue(Pair.Key, FieldValue));
             }
-            bSuccess = true;
+            Result = EJsonDecodeResult::ObjectFields;
         }
         return;
     }
@@ -233,15 +233,15 @@ void UMasterHttpRequestBPLibrary::DecodeJson(const FString& JsonString, const FS
             {
                 case EJson::String:
                     Value = CurrentVal->AsString();
-                    bSuccess = true;
+                    Result = EJsonDecodeResult::Value;
                     break;
                 case EJson::Number:
                     Value = FString::SanitizeFloat(CurrentVal->AsNumber());
-                    bSuccess = true;
+                    Result = EJsonDecodeResult::Value;
                     break;
                 case EJson::Boolean:
                     Value = CurrentVal->AsBool() ? TEXT("true") : TEXT("false");
-                    bSuccess = true;
+                    Result = EJsonDecodeResult::Value;
                     break;
                 case EJson::Object:
                 {
@@ -265,58 +265,24 @@ void UMasterHttpRequestBPLibrary::DecodeJson(const FString& JsonString, const FS
                         }
                         ObjectFields.Add(MakeKeyValue(Pair.Key, FieldValue));
                     }
-                    bSuccess = true;
+                    Result = EJsonDecodeResult::ObjectFields;
                     break;
                 }
                 case EJson::Array:
                 {
                     const TArray<TSharedPtr<FJsonValue>>& Arr = CurrentVal->AsArray();
-                    bool bAllObjects = true;
                     for (const auto& Elem : Arr)
                     {
-                        if (Elem->Type != EJson::Object)
-                        {
-                            bAllObjects = false;
-                            break;
-                        }
+                        FString ObjectJson;
+                        TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&ObjectJson);
+                        FJsonSerializer::Serialize(Elem->AsObject().ToSharedRef(), Writer);
+                        ArrayValues.Add(ObjectJson);
                     }
-                    if (bAllObjects)
-                    {
-                        for (const auto& Elem : Arr)
-                        {
-                            FString ObjectJson;
-                            TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&ObjectJson);
-                            FJsonSerializer::Serialize(Elem->AsObject().ToSharedRef(), Writer);
-                            ArrayValues.Add(ObjectJson);
-                        }
-                        bSuccess = true;
-                    }
-                    else
-                    {
-                        for (const auto& Elem : Arr)
-                        {
-                            FString ElemValue;
-                            if (Elem->Type == EJson::String)
-                                ElemValue = Elem->AsString();
-                            else if (Elem->Type == EJson::Number)
-                                ElemValue = FString::SanitizeFloat(Elem->AsNumber());
-                            else if (Elem->Type == EJson::Boolean)
-                                ElemValue = Elem->AsBool() ? TEXT("true") : TEXT("false");
-                            else
-                            {
-                                TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&ElemValue);
-                                if (Elem->Type == EJson::Object)
-                                    FJsonSerializer::Serialize(Elem->AsObject().ToSharedRef(), Writer);
-                                else if (Elem->Type == EJson::Array)
-                                    FJsonSerializer::Serialize(Elem->AsArray(), Writer);
-                            }
-                            ArrayValues.Add(ElemValue);
-                        }
-                        bSuccess = true;
-                    }
+                    Result = EJsonDecodeResult::ArrayValues;
                     break;
                 }
                 default:
+                    Result = EJsonDecodeResult::Failed;
                     break;
             }
         }
