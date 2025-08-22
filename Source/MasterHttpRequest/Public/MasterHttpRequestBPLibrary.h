@@ -1,8 +1,9 @@
+
 /*
 ==========================================================================================
 File: MasterHttpRequestBPLibrary.h
 Author: Mario Tarosso
-Year: 2023
+Year: 2025
 Publisher: MJGT Studio
 ==========================================================================================
 */
@@ -10,92 +11,68 @@ Publisher: MJGT Studio
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
-// Include the headers for JSON handling
 #include "Json.h"
 #include "MasterHttpRequestBPLibrary.generated.h"
 
 UENUM(BlueprintType)
-enum class E_RequestType_CPP : uint8
+enum class EHttpMethod : uint8
 {
-	GET		UMETA(DisplayName = "GET"),
-	POST	UMETA(DisplayName = "POST"),
-	PUT		UMETA(DisplayName = "PUT"),
-	DELETE	UMETA(DisplayName = "DELETE"),
-    PATCH   UMETA(DisplayName = "PATCH"),
-};
-
-UENUM(BlueprintType)
-enum class EHttpHeaderField : uint8
-{
-    ContentType UMETA(DisplayName = "Content-Type"),
-    Accept UMETA(DisplayName = "Accept"),
-    Authorization UMETA(DisplayName = "Authorization"),
-    Custom UMETA(DisplayName = "Custom"),
+    GET     UMETA(DisplayName = "GET"),
+    POST    UMETA(DisplayName = "POST"),
+    PUT     UMETA(DisplayName = "PUT"),
+    DELETE  UMETA(DisplayName = "DELETE"),
+    PATCH   UMETA(DisplayName = "PATCH")
 };
 
 USTRUCT(BlueprintType)
-struct FResponseData
-{
-	GENERATED_BODY()
-
-	UPROPERTY(BlueprintReadOnly, Category = "HTTP Request")
-	bool bSuccess;
-
-	UPROPERTY(BlueprintReadOnly, Category = "HTTP Request")
-	FString Data;
-
-	UPROPERTY(BlueprintReadOnly, Category = "HTTP Request")
-	int32 StatusCode;
-
-	UPROPERTY(BlueprintReadOnly, Category = "HTTP Request")
-	FString ErrorMessage;
-};
-
-USTRUCT(BlueprintType)
-struct FKeyValuePair
+struct FHttpKeyValue
 {
     GENERATED_BODY()
 
-    UPROPERTY(BlueprintReadWrite, Category = "HTTP Request")
+    UPROPERTY(BlueprintReadWrite, Category = "HTTP")
     FString Key;
 
-    UPROPERTY(BlueprintReadWrite, Category = "HTTP Request")
+    UPROPERTY(BlueprintReadWrite, Category = "HTTP")
     FString Value;
 };
 
 USTRUCT(BlueprintType)
-struct FNestedJson
+struct FHttpOptions
 {
     GENERATED_BODY()
 
-    UPROPERTY(BlueprintReadWrite, Category = "HTTP Request")
-    FKeyValuePair KeyValuePair;
-
-    UPROPERTY(BlueprintReadWrite, Category = "HTTP Request")
-    bool bIsNested;
-
-    UPROPERTY(BlueprintReadWrite, Category = "HTTP Request")
-    FString NestedKey;
-};
-
-
-// This is how you declare a new delegate type.
-DECLARE_DYNAMIC_DELEGATE_OneParam(FRequestReturn, FResponseData, ResponseData);
-
-USTRUCT(BlueprintType)
-struct FHttpRequestOptions
-{
-    GENERATED_BODY()
-
-    UPROPERTY(BlueprintReadWrite, Category = "HTTP Request")
+    UPROPERTY(BlueprintReadWrite, Category = "HTTP")
     int32 TimeoutSeconds = 30;
 
-    UPROPERTY(BlueprintReadWrite, Category = "HTTP Request")
-    bool bEncodePayload = true;
+    UPROPERTY(BlueprintReadWrite, Category = "HTTP")
+    bool bAllowSelfSignedSSL = false;
 
-    UPROPERTY(BlueprintReadWrite, Category = "HTTP Request")
-    bool bAsync = true;
+    UPROPERTY(BlueprintReadWrite, Category = "HTTP")
+    bool bDebug = false;
 };
+
+USTRUCT(BlueprintType)
+struct FHttpResponseSimple
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "HTTP")
+    bool bSuccess;
+
+    UPROPERTY(BlueprintReadOnly, Category = "HTTP")
+    FString Data;
+
+    UPROPERTY(BlueprintReadOnly, Category = "HTTP")
+    int32 StatusCode;
+
+    UPROPERTY(BlueprintReadOnly, Category = "HTTP")
+    FString ErrorMessage;
+
+    UPROPERTY(BlueprintReadOnly, Category = "HTTP")
+    TArray<FHttpKeyValue> Headers;
+};
+
+DECLARE_DYNAMIC_DELEGATE_OneParam(FHttpResponseDelegate, FHttpResponseSimple, Response);
 
 UCLASS()
 class UMasterHttpRequestBPLibrary : public UBlueprintFunctionLibrary
@@ -104,36 +81,46 @@ class UMasterHttpRequestBPLibrary : public UBlueprintFunctionLibrary
 
 public:
     /**
-    * Send an HTTP request (GET, POST, PUT, DELETE, PATCH) with flexible headers and body.
+    * Send an HTTP request (GET, POST, PUT, DELETE, PATCH) with query params, headers, and body.
     * @param URL - The endpoint URL.
     * @param Method - HTTP method.
+    * @param QueryParams - Array of key-value pairs for query string.
     * @param Headers - Array of key-value pairs for headers (defaults applied if empty).
     * @param Body - Array of key-value pairs for JSON body (auto-encoded for POST/PUT/PATCH).
     * @param Callback - Delegate called on completion.
-    * @param bDebug - If true, saves debug info to file.
-    * @param Options - Advanced options (timeout, encoding, async).
+    * @param Options - Advanced options (timeout, SSL, debug).
     */
     UFUNCTION(BlueprintCallable, Category = "HTTP Request")
     static void SendHttpRequest(
         const FString& URL,
-        E_RequestType_CPP Method,
-        const TArray<FKeyValuePair>& Headers,
-        const TArray<FKeyValuePair>& Body,
-        FRequestReturn Callback,
-        bool bDebug = false,
-        const FHttpRequestOptions& Options = FHttpRequestOptions()
+        EHttpMethod Method,
+        const TArray<FHttpKeyValue>& QueryParams,
+        const TArray<FHttpKeyValue>& Headers,
+        const TArray<FHttpKeyValue>& Body,
+        FHttpResponseDelegate Callback,
+        const FHttpOptions& Options
     );
 
     /**
-    * Decode a nested JSON value from a string using dot notation (e.g., "data.user.email").
+    * Helper to create a key-value pair for headers or params.
+    */
+    UFUNCTION(BlueprintPure, Category = "HTTP Request")
+    static FHttpKeyValue MakeKeyValue(const FString& Key, const FString& Value);
+
+    /**
+    * Decode a value from a JSON string using dot notation (e.g., "data.user.email").
     */
     UFUNCTION(BlueprintCallable, Category = "HTTP Request")
-    static void DecodeJsonNested(const FString& JsonString, const FString& KeyPath, bool& bSuccess, FString& Value);
+    static void DecodeJson(const FString& JsonString, const FString& KeyPath, bool& bSuccess, FString& Value);
 
-    // Helper to create a header key-value pair (with defaults for common headers)
+    /**
+    * Set default headers for JSON APIs (Content-Type, Accept, etc.).
+    */
     UFUNCTION(BlueprintPure, Category = "HTTP Request")
-    static FKeyValuePair MakeHeader(const FString& Key, const FString& Value);
+    static TArray<FHttpKeyValue> GetDefaultJsonHeaders();
 
-    // Internal: Improved debug output
-    static void SaveDebugToFile(const FString& URL, E_RequestType_CPP Method, const TArray<FKeyValuePair>& Headers, const TArray<FKeyValuePair>& Body, TSharedPtr<class IHttpResponse> Response, const FResponseData& ReturnData);
+    /**
+    * Real-time debug output (internal use).
+    */
+    static void LogDebugInfo(const FString& URL, EHttpMethod Method, const TArray<FHttpKeyValue>& QueryParams, const TArray<FHttpKeyValue>& Headers, const TArray<FHttpKeyValue>& Body, const FHttpResponseSimple& Response, const FHttpOptions& Options);
 };

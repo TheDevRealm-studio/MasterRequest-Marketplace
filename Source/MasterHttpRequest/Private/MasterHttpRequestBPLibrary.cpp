@@ -9,10 +9,6 @@ Publisher: MJGT Studio
 #include "MasterHttpRequestBPLibrary.h"
 #include "HttpModule.h"
 #include "Interfaces/IHttpRequest.h"
-
-#include "MasterHttpRequestBPLibrary.h"
-#include "HttpModule.h"
-#include "Interfaces/IHttpRequest.h"
 #include "Interfaces/IHttpResponse.h"
 #include "Json.h"
 #include "JsonUtilities.h"
@@ -23,26 +19,63 @@ Publisher: MJGT Studio
 #include "Dom/JsonObject.h"
 #include "HAL/PlatformFilemanager.h"
 
-FKeyValuePair UMasterHttpRequestBPLibrary::MakeHeader(const FString& Key, const FString& Value)
+FHttpKeyValue UMasterHttpRequestBPLibrary::MakeKeyValue(const FString& Key, const FString& Value)
 {
-    FKeyValuePair Pair;
+    FHttpKeyValue Pair;
     Pair.Key = Key;
     Pair.Value = Value;
     return Pair;
 }
 
-void UMasterHttpRequestBPLibrary::SendHttpRequest(const FString& URL, E_RequestType_CPP Method, const TArray<FKeyValuePair>& Headers, const TArray<FKeyValuePair>& Body, FRequestReturn Callback, bool bDebug, const FHttpRequestOptions& Options)
+TArray<FHttpKeyValue> UMasterHttpRequestBPLibrary::GetDefaultJsonHeaders()
+{
+    TArray<FHttpKeyValue> Headers;
+    Headers.Add(MakeKeyValue(TEXT("Content-Type"), TEXT("application/json")));
+    Headers.Add(MakeKeyValue(TEXT("Accept"), TEXT("application/json")));
+    return Headers;
+}
+
+void UMasterHttpRequestBPLibrary::SendHttpRequest(
+    const FString& URL,
+    EHttpMethod Method,
+    const TArray<FHttpKeyValue>& QueryParams,
+    const TArray<FHttpKeyValue>& Headers,
+    const TArray<FHttpKeyValue>& Body,
+    FHttpResponseDelegate Callback,
+    const FHttpOptions& Options)
 {
     auto RequestLambda = [=]() {
+        FString FinalURL = URL;
+        if (QueryParams.Num() > 0)
+        {
+            TArray<FString> QueryArray;
+            for (const auto& Param : QueryParams)
+            {
+                QueryArray.Add(FGenericPlatformHttp::UrlEncode(Param.Key) + TEXT("=") + FGenericPlatformHttp::UrlEncode(Param.Value));
+            }
+            FinalURL += (URL.Contains(TEXT("?")) ? TEXT("&") : TEXT("?")) + FString::Join(QueryArray, TEXT("&"));
+        }
+
         TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = FHttpModule::Get().CreateRequest();
-        HttpRequest->SetURL(URL);
-        FString Verb = StaticEnum<E_RequestType_CPP>()->GetDisplayNameTextByValue(static_cast<int64>(Method)).ToString();
+        HttpRequest->SetURL(FinalURL);
+        FString Verb;
+        switch (Method)
+        {
+            case EHttpMethod::GET: Verb = TEXT("GET"); break;
+            case EHttpMethod::POST: Verb = TEXT("POST"); break;
+            case EHttpMethod::PUT: Verb = TEXT("PUT"); break;
+            case EHttpMethod::DELETE: Verb = TEXT("DELETE"); break;
+            case EHttpMethod::PATCH: Verb = TEXT("PATCH"); break;
+            default: Verb = TEXT("GET"); break;
+        }
         HttpRequest->SetVerb(Verb);
 
-        // Default headers for Laravel
+        // Merge default headers with user headers
         TMap<FString, FString> FinalHeaders;
-        FinalHeaders.Add(TEXT("Content-Type"), TEXT("application/json"));
-        FinalHeaders.Add(TEXT("Accept"), TEXT("application/json"));
+        for (const auto& H : GetDefaultJsonHeaders())
+        {
+            FinalHeaders.Add(H.Key, H.Value);
+        }
         for (const auto& H : Headers)
         {
             FinalHeaders.Add(H.Key, H.Value);
@@ -58,7 +91,7 @@ void UMasterHttpRequestBPLibrary::SendHttpRequest(const FString& URL, E_RequestT
             TSharedPtr<FJsonObject> JsonObject = MakeShareable(new FJsonObject());
             for (const auto& KV : Body)
             {
-                JsonObject->SetStringField(KV.Key, Options.bEncodePayload ? FGenericPlatformHttp::UrlEncode(KV.Value) : KV.Value);
+                JsonObject->SetStringField(KV.Key, KV.Value);
             }
             TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&BodyString);
             FJsonSerializer::Serialize(JsonObject.ToSharedRef(), Writer);
@@ -66,17 +99,28 @@ void UMasterHttpRequestBPLibrary::SendHttpRequest(const FString& URL, E_RequestT
         }
 
         HttpRequest->SetTimeout(Options.TimeoutSeconds);
+        // SSL options: Unreal does not expose direct self-signed handling, but can be extended here if needed
 
         HttpRequest->OnProcessRequestComplete().BindLambda([=](FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful) {
-            FResponseData RespData;
+            FHttpResponseSimple RespData;
             RespData.bSuccess = bWasSuccessful && Response.IsValid() && EHttpResponseCodes::IsOk(Response->GetResponseCode());
             RespData.Data = Response.IsValid() ? Response->GetContentAsString() : TEXT("");
             RespData.StatusCode = Response.IsValid() ? Response->GetResponseCode() : -1;
             RespData.ErrorMessage = bWasSuccessful ? TEXT("") : (Response.IsValid() ? Response->GetContentAsString() : TEXT("No response"));
-
-            if (bDebug)
+            if (Response.IsValid())
             {
-                SaveDebugToFile(URL, Method, Headers, Body, Response, RespData);
+                for (const auto& Header : Response->GetAllHeaders())
+                {
+                    FString Key, Value;
+                    if (Header.Split(TEXT(": "), &Key, &Value))
+                    {
+                        RespData.Headers.Add(MakeKeyValue(Key, Value));
+                    }
+                }
+            }
+            if (Options.bDebug)
+            {
+                LogDebugInfo(FinalURL, Method, QueryParams, Headers, Body, RespData, Options);
             }
             Callback.ExecuteIfBound(RespData);
         });
@@ -84,17 +128,10 @@ void UMasterHttpRequestBPLibrary::SendHttpRequest(const FString& URL, E_RequestT
         HttpRequest->ProcessRequest();
     };
 
-    if (Options.bAsync)
-    {
-        Async(EAsyncExecution::TaskGraph, RequestLambda);
-    }
-    else
-    {
-        RequestLambda();
-    }
+    Async(EAsyncExecution::TaskGraph, RequestLambda);
 }
 
-void UMasterHttpRequestBPLibrary::DecodeJsonNested(const FString& JsonString, const FString& KeyPath, bool& bSuccess, FString& Value)
+void UMasterHttpRequestBPLibrary::DecodeJson(const FString& JsonString, const FString& KeyPath, bool& bSuccess, FString& Value)
 {
     TSharedPtr<FJsonObject> JsonObject;
     TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
@@ -137,11 +174,16 @@ void UMasterHttpRequestBPLibrary::DecodeJsonNested(const FString& JsonString, co
     }
 }
 
-void UMasterHttpRequestBPLibrary::SaveDebugToFile(const FString& URL, E_RequestType_CPP Method, const TArray<FKeyValuePair>& Headers, const TArray<FKeyValuePair>& Body, TSharedPtr<IHttpResponse> Response, const FResponseData& ReturnData)
+void UMasterHttpRequestBPLibrary::LogDebugInfo(const FString& URL, EHttpMethod Method, const TArray<FHttpKeyValue>& QueryParams, const TArray<FHttpKeyValue>& Headers, const TArray<FHttpKeyValue>& Body, const FHttpResponseSimple& Response, const FHttpOptions& Options)
 {
     FString DebugInfo;
     DebugInfo += TEXT("URL: ") + URL + TEXT("\n");
-    DebugInfo += TEXT("Method: ") + StaticEnum<E_RequestType_CPP>()->GetDisplayNameTextByValue(static_cast<int64>(Method)).ToString() + TEXT("\n");
+    DebugInfo += TEXT("Method: ") + StaticEnum<EHttpMethod>()->GetDisplayNameTextByValue(static_cast<int64>(Method)).ToString() + TEXT("\n");
+    DebugInfo += TEXT("Query Params:\n");
+    for (const auto& Q : QueryParams)
+    {
+        DebugInfo += Q.Key + TEXT("=") + Q.Value + TEXT("\n");
+    }
     DebugInfo += TEXT("Headers:\n");
     for (const auto& H : Headers)
     {
@@ -152,26 +194,23 @@ void UMasterHttpRequestBPLibrary::SaveDebugToFile(const FString& URL, E_RequestT
     {
         DebugInfo += B.Key + TEXT(": ") + B.Value + TEXT("\n");
     }
-    if (Response.IsValid())
+    DebugInfo += TEXT("\nResponse:\n");
+    DebugInfo += TEXT("Status Code: ") + FString::FromInt(Response.StatusCode) + TEXT("\n");
+    DebugInfo += TEXT("Success: ") + (Response.bSuccess ? FString(TEXT("true")) : FString(TEXT("false"))) + TEXT("\n");
+    DebugInfo += TEXT("Error Message: ") + Response.ErrorMessage + TEXT("\n");
+    DebugInfo += TEXT("Data: ") + Response.Data + TEXT("\n");
+    DebugInfo += TEXT("Response Headers:\n");
+    for (const auto& H : Response.Headers)
     {
-        DebugInfo += TEXT("\nServer Headers:\n");
-        for (const auto& Header : Response->GetAllHeaders())
-        {
-            DebugInfo += Header + TEXT("\n");
-        }
-        DebugInfo += TEXT("\nServer Payload:\n") + Response->GetContentAsString() + TEXT("\n");
-        DebugInfo += TEXT("Status Code: ") + FString::FromInt(Response->GetResponseCode()) + TEXT("\n");
+        DebugInfo += H.Key + TEXT(": ") + H.Value + TEXT("\n");
     }
-    DebugInfo += TEXT("\nResponse Data:\n") + ReturnData.Data + TEXT("\n");
-    DebugInfo += FString::Printf(TEXT("Success: %s\n"), ReturnData.bSuccess ? TEXT("true") : TEXT("false"));
-    DebugInfo += TEXT("Error Message: ") + ReturnData.ErrorMessage + TEXT("\n");
 
     FString Timestamp = FDateTime::Now().ToString(TEXT("%Y-%m-%d_%H-%M-%S"));
     FString SlugifiedURL = URL;
     SlugifiedURL.ReplaceInline(TEXT("//"), TEXT("_"));
     SlugifiedURL.ReplaceInline(TEXT("/"), TEXT("_"));
     SlugifiedURL.ReplaceInline(TEXT(":"), TEXT("_"));
-    FString FileName = SlugifiedURL + TEXT("-") + StaticEnum<E_RequestType_CPP>()->GetDisplayNameTextByValue(static_cast<int64>(Method)).ToString() + TEXT("-") + Timestamp + TEXT(".txt");
+    FString FileName = SlugifiedURL + TEXT("-") + StaticEnum<EHttpMethod>()->GetDisplayNameTextByValue(static_cast<int64>(Method)).ToString() + TEXT("-") + Timestamp + TEXT(".txt");
     FString FileDirectory = FPaths::ProjectSavedDir() + TEXT("/DebugHTTP");
     FString FullPath = FileDirectory + TEXT("/") + FileName;
 
@@ -180,13 +219,6 @@ void UMasterHttpRequestBPLibrary::SaveDebugToFile(const FString& URL, E_RequestT
         FPlatformFileManager::Get().GetPlatformFile().CreateDirectory(*FileDirectory);
     }
 
-    if (FFileHelper::SaveStringToFile(DebugInfo, *FullPath))
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Saved HTTP debug info to %s"), *FullPath);
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("Failed to save HTTP debug info to %s"), *FullPath);
-    }
+    FFileHelper::SaveStringToFile(DebugInfo, *FullPath);
 }
 
