@@ -14,6 +14,7 @@ Publisher: MJGT Studio
 #include "Json.h"
 #include "MasterHttpRequestBPLibrary.generated.h"
 
+
 UENUM(BlueprintType)
 enum class EHttpMethod : uint8
 {
@@ -22,6 +23,35 @@ enum class EHttpMethod : uint8
     PUT     UMETA(DisplayName = "PUT"),
     DELETE  UMETA(DisplayName = "DELETE"),
     PATCH   UMETA(DisplayName = "PATCH")
+};
+
+
+UENUM(BlueprintType)
+enum class EHttpHeaderKey : uint8
+{
+    None            UMETA(DisplayName = "None"),
+    Authorization   UMETA(DisplayName = "Authorization"),
+    UserAgent       UMETA(DisplayName = "User-Agent"),
+    AcceptLanguage  UMETA(DisplayName = "Accept-Language"),
+    CacheControl    UMETA(DisplayName = "Cache-Control"),
+    Cookie          UMETA(DisplayName = "Cookie"),
+    Referer         UMETA(DisplayName = "Referer"),
+    Custom          UMETA(DisplayName = "Custom")
+};
+
+USTRUCT(BlueprintType)
+struct FHttpHeaderEnumValue
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadWrite, Category = "HTTP")
+    EHttpHeaderKey Key = EHttpHeaderKey::None;
+
+    UPROPERTY(BlueprintReadWrite, Category = "HTTP")
+    FString Value;
+
+    UPROPERTY(BlueprintReadWrite, Category = "HTTP")
+    FString CustomKey; // Used if Key == Custom
 };
 
 USTRUCT(BlueprintType)
@@ -81,24 +111,26 @@ class UMasterHttpRequestBPLibrary : public UBlueprintFunctionLibrary
 
 public:
     /**
-    * Send an HTTP request (GET, POST, PUT, DELETE, PATCH) with query params, headers, and body.
+    * Send an HTTP request (GET, POST, PUT, DELETE, PATCH) with optional query params, headers, and body.
     * @param URL - The endpoint URL.
     * @param Method - HTTP method.
-    * @param QueryParams - Array of key-value pairs for query string.
-    * @param Headers - Array of key-value pairs for headers (defaults applied if empty).
-    * @param Body - Array of key-value pairs for JSON body (auto-encoded for POST/PUT/PATCH).
+    * @param DefaultHeaders - Array of enum-based headers (optional, common headers).
+    * @param CustomHeaders - Array of key-value pairs for custom headers (optional).
+    * @param QueryParams - Array of key-value pairs for query string (optional).
+    * @param Body - Array of key-value pairs for JSON body (optional).
     * @param Callback - Delegate called on completion.
-    * @param Options - Advanced options (timeout, SSL, debug).
+    * @param Options - Advanced options (timeout, SSL, debug; optional, defaults applied).
     */
     UFUNCTION(BlueprintCallable, Category = "HTTP Request")
     static void SendHttpRequest(
         const FString& URL,
         EHttpMethod Method,
-        const TArray<FHttpKeyValue>& QueryParams,
-        const TArray<FHttpKeyValue>& Headers,
-        const TArray<FHttpKeyValue>& Body,
+        TArray<FHttpHeaderEnumValue> DefaultHeaders,
+        TArray<FHttpKeyValue> CustomHeaders,
+        TArray<FHttpKeyValue> QueryParams,
+        TArray<FHttpKeyValue> Body,
         FHttpResponseDelegate Callback,
-        const FHttpOptions& Options
+        FHttpOptions Options
     );
 
     /**
@@ -108,10 +140,17 @@ public:
     static FHttpKeyValue MakeKeyValue(const FString& Key, const FString& Value);
 
     /**
+    * Helper to create an enum-based header value.
+    */
+    UFUNCTION(BlueprintPure, Category = "HTTP Request")
+    static FHttpHeaderEnumValue MakeEnumHeader(EHttpHeaderKey Key, const FString& Value, const FString& CustomKey = TEXT(""));
+
+    /**
     * Decode a value from a JSON string using dot notation (e.g., "data.user.email").
+    * Returns a string value, an array of key-value pairs for objects, or an array of strings for arrays.
     */
     UFUNCTION(BlueprintCallable, Category = "HTTP Request")
-    static void DecodeJson(const FString& JsonString, const FString& KeyPath, bool& bSuccess, FString& Value);
+    static void DecodeJson(const FString& JsonString, const FString& KeyPath, bool& bSuccess, FString& Value, TArray<FHttpKeyValue>& ObjectFields, TArray<FString>& ArrayValues);
 
     /**
     * Set default headers for JSON APIs (Content-Type, Accept, etc.).
