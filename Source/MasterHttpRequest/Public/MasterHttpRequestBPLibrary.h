@@ -78,8 +78,24 @@ struct FNestedJson
     FString NestedKey;
 };
 
+
 // This is how you declare a new delegate type.
 DECLARE_DYNAMIC_DELEGATE_OneParam(FRequestReturn, FResponseData, ResponseData);
+
+USTRUCT(BlueprintType)
+struct FHttpRequestOptions
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadWrite, Category = "HTTP Request")
+    int32 TimeoutSeconds = 30;
+
+    UPROPERTY(BlueprintReadWrite, Category = "HTTP Request")
+    bool bEncodePayload = true;
+
+    UPROPERTY(BlueprintReadWrite, Category = "HTTP Request")
+    bool bAsync = true;
+};
 
 UCLASS()
 class UMasterHttpRequestBPLibrary : public UBlueprintFunctionLibrary
@@ -87,36 +103,37 @@ class UMasterHttpRequestBPLibrary : public UBlueprintFunctionLibrary
     GENERATED_BODY()
 
 public:
+    /**
+    * Send an HTTP request (GET, POST, PUT, DELETE, PATCH) with flexible headers and body.
+    * @param URL - The endpoint URL.
+    * @param Method - HTTP method.
+    * @param Headers - Array of key-value pairs for headers (defaults applied if empty).
+    * @param Body - Array of key-value pairs for JSON body (auto-encoded for POST/PUT/PATCH).
+    * @param Callback - Delegate called on completion.
+    * @param bDebug - If true, saves debug info to file.
+    * @param Options - Advanced options (timeout, encoding, async).
+    */
+    UFUNCTION(BlueprintCallable, Category = "HTTP Request")
+    static void SendHttpRequest(
+        const FString& URL,
+        E_RequestType_CPP Method,
+        const TArray<FKeyValuePair>& Headers,
+        const TArray<FKeyValuePair>& Body,
+        FRequestReturn Callback,
+        bool bDebug = false,
+        const FHttpRequestOptions& Options = FHttpRequestOptions()
+    );
+
+    /**
+    * Decode a nested JSON value from a string using dot notation (e.g., "data.user.email").
+    */
+    UFUNCTION(BlueprintCallable, Category = "HTTP Request")
+    static void DecodeJsonNested(const FString& JsonString, const FString& KeyPath, bool& bSuccess, FString& Value);
+
+    // Helper to create a header key-value pair (with defaults for common headers)
     UFUNCTION(BlueprintPure, Category = "HTTP Request")
-    static FKeyValuePair MakeHeader(EHttpHeaderField Header, FString Value, FString CustomName = TEXT(""));
+    static FKeyValuePair MakeHeader(const FString& Key, const FString& Value);
 
-    UFUNCTION(BlueprintCallable, Category = "HTTP Request")
-    static void MasterRequestAdvanced(FString url, E_RequestType_CPP httpMethod, TArray<FKeyValuePair> bodyPayload, TArray<FKeyValuePair> headers, FRequestReturn callback, bool bEncodePayload = true, bool bAsync = false, bool debugResponse = false);
-
-        // Overloaded version without bodyPayload and headers
-        UFUNCTION(BlueprintCallable, Category = "HTTP Request")
-        static void MasterRequest(FString url, E_RequestType_CPP httpMethod, FRequestReturn callback);
-
-	// Overloaded version with bodyPayload and headers
-	UFUNCTION(BlueprintCallable, Category = "HTTP Request")
-    static void MasterRequestWithPayloadAndHeaders(FString url, E_RequestType_CPP httpMethod, TArray<FKeyValuePair> bodyPayload, TArray<FKeyValuePair> headers, FRequestReturn callback, bool debugResponse = false);
-
-    UFUNCTION(BlueprintCallable, Category = "HTTP Request")
-    static void MasterRequestWithPayloadAndHeadersWithoutEncoding(FString url, E_RequestType_CPP httpMethod, TArray<FKeyValuePair> bodyPayload, TArray<FKeyValuePair> headers, FRequestReturn callback, bool debugResponse = false);
-
-	// Asynchronous version with bodyPayload and headers
-	UFUNCTION(BlueprintCallable, Category = "Async HTTP Request")
-    static void MasterRequestAsync(FString url, E_RequestType_CPP httpMethod, TArray<FKeyValuePair> bodyPayload, TArray<FKeyValuePair> headers, FRequestReturn callback, bool debugResponse = false);
-    // Asynchronous version with bodyPayload and headers same as above but without encoding
-    UFUNCTION(BlueprintCallable, Category = "Async HTTP Request Without Encoding")
-    static void MasterRequestAsyncWithoutEncoding(FString url, E_RequestType_CPP httpMethod, TArray<FKeyValuePair> bodyPayload, TArray<FKeyValuePair> headers, FRequestReturn callback, bool debugResponse = false);
-
-    UFUNCTION(BlueprintCallable, Category = "HTTP Request")
-    static void DecodeJson(FString jsonString, FString key, bool& success, FString& value);
-
-    UFUNCTION(BlueprintCallable, Category = "HTTP Request")
-    static void DecodeNestedJson(FString jsonString, FString key, bool& success, TArray<FNestedJson>& keyValuePairArray);
-
-    // Notice it's not a static function and it's not exposed to Blueprints
-    static void WriteJsonValue(TSharedRef<TJsonWriter<>> Writer, TSharedPtr<FJsonValue> JsonVal);
+    // Internal: Improved debug output
+    static void SaveDebugToFile(const FString& URL, E_RequestType_CPP Method, const TArray<FKeyValuePair>& Headers, const TArray<FKeyValuePair>& Body, TSharedPtr<class IHttpResponse> Response, const FResponseData& ReturnData);
 };
